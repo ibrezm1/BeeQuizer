@@ -35,12 +35,13 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   final List<String> _quickPrompts = [
+    'Explain the question without revealing the answer',
+    'Give me a code example',
+    'Why is this important?',
     'Explain this like I\'m 12',
     'What are real-world examples?',
     'How does this impact development?',
     'What are common mistakes?',
-    'Give me a code example',
-    'Why is this important?',
   ];
 
   @override

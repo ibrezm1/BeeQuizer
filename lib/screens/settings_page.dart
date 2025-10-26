@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -19,8 +22,9 @@ class _SettingsPageState extends State<SettingsPage> {
   final _apiKeyController = TextEditingController();
   String _selectedModel = 'gemini-1.5-flash';
   bool _obscureApiKey = true;
+  bool _isLoadingModels = false;
 
-  final List<String> _availableModels = [
+  List<String> _availableModels = [
     'gemini-1.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-1.5-pro',
@@ -30,7 +34,9 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _loadSettings().then((_) {
+      _loadAvailableModels();
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -39,6 +45,65 @@ class _SettingsPageState extends State<SettingsPage> {
       _apiKeyController.text = prefs.getString('geminiApiKey') ?? '';
       _selectedModel = prefs.getString('geminiModel') ?? 'gemini-1.5-flash';
     });
+  }
+
+  Future<void> _loadAvailableModels() async {
+    setState(() {
+      _isLoadingModels = true;
+    });
+
+    try {
+      final apiKey = _apiKeyController.text;
+      if (apiKey.isEmpty) {
+        setState(() {
+          _isLoadingModels = false;
+        });
+        return;
+      }
+
+      final response = await http.get(Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey'));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> models = data['models'];
+        final List<String> modelNames = models
+            .where((m) {
+          final methods = m['supportedGenerationMethods'] as List?;
+          return methods?.contains('generateContent') ?? false;
+        })
+            .map((m) => m['name'] as String)
+            .map((name) => name.replaceFirst('models/', ''))
+            .toList();
+
+        if (modelNames.isNotEmpty) {
+          setState(() {
+            _availableModels = modelNames;
+            if (!_availableModels.contains(_selectedModel)) {
+              _selectedModel = _availableModels.first;
+            }
+          });
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not fetch available models')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching models: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingModels = false;
+        });
+      }
+    }
   }
 
   Future<void> _saveSettings() async {
@@ -50,6 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings saved successfully')),
     );
+    _loadAvailableModels();
   }
 
   Future<void> _clearAllData() async {
@@ -58,8 +124,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Clear All Data'),
         content: const Text(
-          'This will delete all knowledge bases and quiz cards. This action cannot be undone.',
-        ),
+            'This will delete all knowledge bases and quiz cards. This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -83,8 +148,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All data cleared')),
       );
-      // This is a bit of a hack to force the home page to rebuild
-      // A better solution would involve a state management solution
       Navigator.popUntil(context, (route) => route.isFirst);
     }
   }
@@ -133,31 +196,38 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _selectedModel,
-                    decoration: const InputDecoration(
-                      labelText: 'Model',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _availableModels.map((model) {
-                      return DropdownMenuItem(
-                        value: model,
-                        child: Text(model),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedModel = value;
-                        });
-                      }
-                    },
-                  ),
+                  _isLoadingModels
+                      ? const Center(child: CircularProgressIndicator())
+                      : DropdownButtonFormField<String>(
+                          value: _selectedModel,
+                          decoration: InputDecoration(
+                            labelText: 'Model',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.refresh),
+                              onPressed: _loadAvailableModels,
+                              tooltip: 'Fetch Models',
+                            ),
+                          ),
+                          items: _availableModels.map((model) {
+                            return DropdownMenuItem(
+                              value: model,
+                              child: Text(model),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedModel = value;
+                              });
+                            }
+                          },
+                        ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     onPressed: _saveSettings,
                     icon: const Icon(Icons.save),
-                    label: const Text('Save API Settings'),
+                    label: const Text('Save Settings'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
                     ),
@@ -231,8 +301,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text('Clear All Data'),
-              subtitle:
-              const Text('Delete all knowledge bases and quiz cards'),
+              subtitle: const Text(
+                  'Delete all knowledge bases and quiz cards'),
               onTap: _clearAllData,
             ),
           ),

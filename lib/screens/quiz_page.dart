@@ -128,9 +128,17 @@ class _QuizPageState extends State<QuizPage> {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Text(
-                      card.question,
-                      style: Theme.of(context).textTheme.titleLarge,
+                    // Use a Container with BoxConstraints for a flexible height.
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        maxHeight: 400, // Set your maximum desired height here.
+                      ),
+                      child: SingleChildScrollView(
+                        child: MarkdownBody(
+                          data: card.question,
+                          styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -178,9 +186,12 @@ class _QuizPageState extends State<QuizPage> {
                                 },
                               ),
                               Expanded(
-                                child: Text(
-                                  option,
-                                  style: Theme.of(context).textTheme.bodyLarge,
+                                child: MarkdownBody(
+                                  data: option,
+                                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                    // Apply the same text style that you had on the Text widget
+                                    p: Theme.of(context).textTheme.bodyLarge,
+                                  ),
                                 ),
                               ),
                             ],

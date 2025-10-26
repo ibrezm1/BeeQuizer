@@ -117,16 +117,6 @@ For each question, provide:
 2. Four multiple choice options (A, B, C, D)
 3. The correct answer letter
 4. A brief explanation
-
-Format your response as a valid JSON array like this:
-[
-  {
-    "question": "new question text",
-    "options": ["A. option1", "B. option2", "C. option3", "D. option4"],
-    "correct": "B",
-    "explanation": "explanation text"
-  }
-]
 ''';
       final response = await http.post(
         Uri.parse(
@@ -140,6 +130,33 @@ Format your response as a valid JSON array like this:
               ]
             }
           ],
+          'generationConfig': {
+            'response_mime_type': 'application/json',
+            'response_schema': {
+              'type': 'ARRAY',
+              'description': 'Array of quiz questions about recipes.',
+              'items': {
+                'type': 'OBJECT',
+                'properties': {
+                  'question': {'type': 'STRING', 'description': 'The quiz question.'},
+                  'options': {
+                    'type': 'ARRAY',
+                    'description': 'An array of four multiple-choice options.',
+                    'items': {'type': 'STRING'}
+                  },
+                  'correct': {
+                    'type': 'STRING',
+                    'description': 'The letter of the correct answer.'
+                  },
+                  'explanation': {
+                    'type': 'STRING',
+                    'description': 'A brief explanation of the correct answer.'
+                  }
+                },
+                'required': ['question', 'options', 'correct', 'explanation']
+              }
+            }
+          }
         }),
       );
 
@@ -148,11 +165,7 @@ Format your response as a valid JSON array like this:
         final text = data['candidates'][0]['content']['parts'][0]['text'];
 
         String jsonText = text;
-        if (text.contains('```json')) {
-          jsonText = text.split('```json')[1].split('```').first.trim();
-        } else if (text.contains('```')) {
-          jsonText = text.split('```')[1].split('```').first.trim();
-        }
+
 
         final List<dynamic> questions = json.decode(jsonText);
 
